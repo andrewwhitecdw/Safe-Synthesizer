@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Install project Python dependencies for a selected profile: dev, engine, cpu, cuda, or cu129. Modifies the project virtualenv."
+#MISE description="Install project Python dependencies for a selected profile: dev, engine, cpu, cuda, cu129, or cu130. Modifies the project virtualenv."
 #USAGE arg "<extra>" help="Python dependency profile" {
-#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129"
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129" "cu130"
 #USAGE }
 
 set -euo pipefail
@@ -17,6 +17,9 @@ case "${usage_extra?}" in
   cuda|cu129)
     uv sync --frozen --extra cu129 --extra engine --group dev
     ;;
+  cu130)
+    uv sync --frozen --extra cu130 --extra engine --group dev
+    ;;
   cpu)
     uv sync --frozen --extra cpu --extra engine --group dev
     ;;
@@ -27,7 +30,7 @@ case "${usage_extra?}" in
     uv sync --frozen --group dev
     ;;
   *)
-    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu129" >&2
+    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu129 cu130" >&2
     exit 1
     ;;
 esac
