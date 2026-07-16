@@ -96,8 +96,8 @@ jobs:
             cuda-extra: cu129
             required: true
           - python-version: "3.13"
-            # Non-required while the CUDA 13 rollout is validated. Promote to
-            # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
+            # Non-required until a run of green nightly cu130 results validates the rollout;
+            # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
             cuda-extra: cu130
             required: false
     steps:
@@ -164,8 +164,8 @@ jobs:
         include:
           - cuda-extra: cu129
             required: true
-          # Non-required while the CUDA 13 rollout is validated. Promote to
-          # required once cu130 has container-build coverage (see docs/developer-guide/docker.md).
+          # Non-required until a run of green nightly cu130 results validates the rollout;
+          # container-build and e2e coverage already exist (see docs/developer-guide/docker.md).
           - cuda-extra: cu130
             required: false
     steps:
@@ -182,6 +182,8 @@ jobs:
 
       - name: Run GPU E2E tests
         run: mise run test:e2e
+        env:
+          NSS_GPU_CUDA_EXTRA: ${{ matrix.cuda-extra }}
         timeout-minutes: 190
 
   # ---------------------------------------------------------------------------
