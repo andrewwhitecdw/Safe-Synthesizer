@@ -13,8 +13,8 @@ for training, generation, and evaluation.
 
 - Docker 20.10+ (BuildKit enabled by default in 23.0+)
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed and configured
-- NVIDIA driver compatible with the CUDA libraries installed by the selected
-  image variant (`cu129` or `cu130`)
+- NVIDIA driver compatible with the CUDA libraries installed by the image
+  variant (`cu129` today)
 - NVIDIA GPU (A100 or better recommended)
 
 Verify GPU access works:
