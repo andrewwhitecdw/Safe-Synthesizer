@@ -398,6 +398,7 @@ class VllmBackend(GeneratorBackend):
                 self.config,
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
+                response_framing=self.model_metadata.response_framing,
             )
             params["regex"] = regex
         elif schema_method == "json_schema":
@@ -413,6 +414,7 @@ class VllmBackend(GeneratorBackend):
                 self.config,
                 bos_token=pc.bos_token,
                 eos_token=pc.eos_token,
+                response_framing=self.model_metadata.response_framing,
             )
 
         return StructuredOutputsParams(**params)

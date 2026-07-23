@@ -26,6 +26,7 @@ from outlines_core._json_schema import (  # noqa: F401  # ty:ignore[unresolved-i
 )
 from range_regex import bounded_regex_for_range
 
+from ..llm.metadata import ResponseFraming
 from ..observability import get_logger
 
 if TYPE_CHECKING:
@@ -327,6 +328,7 @@ def build_json_based_regex(
     bos_token: str,
     eos_token: str,
     whitespace_pattern: str | None = None,
+    response_framing: ResponseFraming | None = None,
 ) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
 
@@ -345,6 +347,9 @@ def build_json_based_regex(
         eos_token: End-of-sequence token (used when grouping).
         whitespace_pattern: Optional regex fragment for matching
             whitespace between JSON tokens.
+        response_framing: Model-owned boundaries for grouped completions.
+            When omitted, ``bos_token`` and ``eos_token`` preserve the
+            legacy framing.
 
     Returns:
         Compiled regex string suitable for vLLM's structured-output
@@ -354,16 +359,28 @@ def build_json_based_regex(
 
     record_regex = _build_regex(schema, whitespace_pattern)
 
-    if config.data.group_training_examples_by is not None:
-        sequence_regex = rf"{re.escape(bos_token)}({record_regex}\n)+{re.escape(eos_token)}"
+    is_grouped = config.data.group_training_examples_by is not None
+    framing = response_framing or ResponseFraming(
+        first_prefix=bos_token,
+        subsequent_prefix=bos_token,
+        suffix=eos_token,
+    )
+
+    if is_grouped:
+        record_lines = rf"({record_regex}\n)+"
+        first_sequence_regex = f"{re.escape(framing.first_prefix)}{record_lines}{re.escape(framing.suffix)}"
+        subsequent_sequence_regex = f"{re.escape(framing.subsequent_prefix)}{record_lines}{re.escape(framing.suffix)}"
     else:
         # Without grouping, the "sequence" is a single record.
-        sequence_regex = record_regex
+        first_sequence_regex = record_regex
+        subsequent_sequence_regex = record_regex
 
     if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
-        regex = sequence_regex
+        regex = first_sequence_regex
+    elif is_grouped and response_framing is not None:
+        regex = rf"{first_sequence_regex}({subsequent_sequence_regex})*"
     else:
-        regex = rf"({sequence_regex}\n)+"
+        regex = rf"({first_sequence_regex}\n)+"
 
     return regex
 
@@ -383,11 +400,17 @@ def _plus_format(content: dict[str, Any]) -> dict[str, Any]:
     return {"type": "plus", "content": content}
 
 
+def _star_format(content: dict[str, Any]) -> dict[str, Any]:
+    """Return an XGrammar zero-or-more repetition format."""
+    return {"type": "star", "content": content}
+
+
 def build_json_structural_tag(
     schema: dict[str, Any],
     config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
+    response_framing: ResponseFraming | None = None,
 ) -> str:
     """Build an XGrammar Structural Tag for schema-constrained JSONL records.
 
@@ -402,6 +425,9 @@ def build_json_structural_tag(
             structured-generation settings).
         bos_token: Beginning-of-sequence token (used when grouping).
         eos_token: End-of-sequence token (used when grouping).
+        response_framing: Model-owned boundaries for grouped completions.
+            When omitted, ``bos_token`` and ``eos_token`` preserve the
+            legacy framing.
 
     Returns:
         JSON string suitable for ``StructuredOutputsParams(structural_tag=...)``.
@@ -412,21 +438,43 @@ def build_json_structural_tag(
     }
     record_line_format = _sequence_format([record_format, _const_string_format("\n")])
 
-    if config.data.group_training_examples_by is not None:
-        sequence_format = _sequence_format(
+    is_grouped = config.data.group_training_examples_by is not None
+    framing = response_framing or ResponseFraming(
+        first_prefix=bos_token,
+        subsequent_prefix=bos_token,
+        suffix=eos_token,
+    )
+
+    if is_grouped:
+        first_sequence_format = _sequence_format(
             [
-                _const_string_format(bos_token),
+                _const_string_format(framing.first_prefix),
                 _plus_format(record_line_format),
-                _const_string_format(eos_token),
+                _const_string_format(framing.suffix),
+            ]
+        )
+        subsequent_sequence_format = _sequence_format(
+            [
+                _const_string_format(framing.subsequent_prefix),
+                _plus_format(record_line_format),
+                _const_string_format(framing.suffix),
             ]
         )
     else:
-        sequence_format = record_format
+        first_sequence_format = record_format
+        subsequent_sequence_format = record_format
 
     if config.generation.structured_generation.use_single_sequence and config.data.max_sequences_per_example == 1:
-        output_format = sequence_format
-    elif config.data.group_training_examples_by is not None:
-        output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))
+        output_format = first_sequence_format
+    elif is_grouped and response_framing is not None:
+        output_format = _sequence_format(
+            [
+                first_sequence_format,
+                _star_format(subsequent_sequence_format),
+            ]
+        )
+    elif is_grouped:
+        output_format = _plus_format(_sequence_format([first_sequence_format, _const_string_format("\n")]))
     else:
         output_format = _plus_format(record_line_format)
 

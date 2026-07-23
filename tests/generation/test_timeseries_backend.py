@@ -411,7 +411,7 @@ class TestUpdateGroupState:
 
 
 class TestStopTimestampTruncation:
-    def test_invalidates_records_after_stop_and_retains_the_stop_record(
+    def test_drops_records_after_stop_and_retains_the_stop_record(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
     ):
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
@@ -431,7 +431,7 @@ class TestStopTimestampTruncation:
             "2024-01-01 02:00:00",
             "2024-01-01 03:00:00",
         ]
-        assert response.records[-1].error == ("Timestamp exceeds configured stop time", "TimeSeries")
+        assert [record.text for record in response.records] == ["one", "stop"]
 
     def test_crossing_stop_completes_even_when_truncation_exceeds_invalid_threshold(
         self, timeseries_base_params, timeseries_model_metadata, mock_workdir
@@ -456,6 +456,12 @@ class TestStopTimestampTruncation:
         assert state.low_valid_fraction_count == 0
         assert state.total_invalid_records == 0
         assert [record["timestamp"] for record in state.recent_records] == ["2024-01-01 02:00:00"]
+
+        batches = GenerationBatches(invalid_fraction_threshold=0.5, patience=1)
+        batches.add_batch(batch)
+
+        assert batches.num_invalid_records == 0
+        assert batches.running_stopping_metric.mean == 0
 
 
 class TestGetTimestampFromPrefill:
